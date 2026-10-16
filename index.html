@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>No Rerolls</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one narrow column — a "roll slip" with two reels, then the timer, then the log. Single dark look matching chase is no fun. */
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+:root {
+  --bg: #020617;
+  --panel: #0b1226;
+  --line: #1c2540;
+  --fg: #eef0f6;
+  --muted: #8a93ab;
+  --accent: #ff6719;
+  --accent-ink: #1a0a02;
+  --good: #4fd18b;
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--fg); }
+body {
+  font-family: var(--display);
+  font-size: 16px;
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+}
+.wrap { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+header { display: flex; flex-direction: column; gap: 4px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 0; font-size: clamp(40px, 11vw, 56px); font-weight: 800; line-height: .95; letter-spacing: -.02em; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.rule { color: var(--muted); font-size: 15px; margin: 4px 0 0; }
+
+.slip { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+.reels { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.reel { border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.reel .label { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.reel .value { font-size: clamp(22px, 6.5vw, 30px); font-weight: 800; line-height: 1.1; overflow-wrap: anywhere; min-height: 1.1em; }
+.reel .odds { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.reel.locked { border-style: solid; border-color: var(--accent); }
+.reel.spinning .value { color: var(--muted); }
+
+button { font-family: var(--display); font-size: 17px; font-weight: 800; border-radius: 10px; padding: 14px 18px; cursor: pointer; border: 1px solid transparent; }
+button:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px; }
+.primary { background: var(--accent); color: var(--accent-ink); }
+.primary:hover { filter: brightness(1.08); }
+.ghost { background: transparent; color: var(--fg); border-color: var(--line); }
+.ghost:hover { border-color: var(--muted); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row button { flex: 1 1 140px; }
+.note { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 0; }
+
+.timer { display: flex; flex-direction: column; align-items: center; gap: 14px; padding-block: 8px; }
+.clock { font-family: var(--mono); font-weight: 600; font-size: clamp(56px, 18vw, 84px); font-variant-numeric: tabular-nums; letter-spacing: -.03em; line-height: 1; }
+.clock.hidden-time { color: var(--muted); font-size: clamp(28px, 8vw, 36px); letter-spacing: .02em; }
+.bar { width: 100%; height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s linear; }
+.done-banner { text-align: center; font-size: 22px; font-weight: 800; color: var(--good); margin: 0; }
+
+.copyline { display: flex; gap: 8px; align-items: center; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 8px 8px 12px; }
+.copyline code { font-family: var(--mono); font-size: 13px; flex: 1; min-width: 0; overflow-wrap: anywhere; user-select: all; }
+.copyline button { font-size: 13px; padding: 8px 12px; flex: 0 0 auto; }
+
+h2 { font-size: 13px; font-family: var(--mono); font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.log li { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 15px; align-items: baseline; }
+.log .n { font-family: var(--mono); color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.log .t { font-family: var(--mono); color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.empty { color: var(--muted); font-size: 14px; margin: 0; }
+
+@keyframes flash { 0%,100% { background: var(--panel); } 50% { background: #3a1606; } }
+.slip.alarm { animation: flash 1s ease-in-out 3; }
+@media (prefers-reduced-motion: reduce) { .slip.alarm { animation: none; } .bar i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">chase is no fun · writing session</div>
+    <h1>No <span>Rerolls.</span></h1>
+    <p class="rule">Open the book to any prompt, roll once, write until the timer ends. Whatever comes up, you write.</p>
+  </header>
+
+  <section class="slip" id="slip" aria-live="polite">
+    <div class="reels">
+      <div class="reel" id="reelGenre">
+        <span class="label">Genre</span>
+        <span class="value" id="genre">—</span>
+        <span class="odds">1 of 8</span>
+      </div>
+      <div class="reel" id="reelTime">
+        <span class="label">Time</span>
+        <span class="value" id="time">—</span>
+        <span class="odds">15 · 30 · 45 · 60 min</span>
+      </div>
+    </div>
+
+    <div id="rollArea" class="row">
+      <button class="primary" id="rollBtn" type="button">Roll</button>
+    </div>
+
+    <div id="timerArea" class="timer" hidden>
+      <div class="clock" id="clock">00:00</div>
+      <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+      <p class="done-banner" id="doneBanner" hidden>Time's up. Pens down.</p>
+      <div class="row" style="width:100%">
+        <button class="primary" id="startBtn" type="button">Start timer</button>
+        <button class="ghost" id="hideBtn" type="button">Hide clock</button>
+      </div>
+      <div class="row" style="width:100%">
+        <button class="ghost" id="finishBtn" type="button">Finish session</button>
+      </div>
+      <p class="note" id="finishNote" hidden>Finishing early still counts. Tap again to confirm.</p>
+    </div>
+
+    <div class="copyline" id="copyWrap" hidden>
+      <code id="copyText"></code>
+      <button class="ghost" id="copyBtn" type="button">Copy</button>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:8px">
+    <h2>Past sessions</h2>
+    <ul class="log" id="log"></ul>
+    <p class="empty" id="emptyLog">No sessions yet. Your first roll will show up here.</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  const GENRES = ["Sci-fi", "Horror", "Comedy", "Memoir", "Noir/crime", "Fantasy", "Superhero", "Thriller/mystery"];
+  const TIMES = [15, 30, 45, 60];
+  const KEY = "noRerolls.v1";
+
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    genre: $("genre"), time: $("time"), reelGenre: $("reelGenre"), reelTime: $("reelTime"),
+    rollArea: $("rollArea"), rollBtn: $("rollBtn"), timerArea: $("timerArea"), clock: $("clock"),
+    bar: $("bar"), startBtn: $("startBtn"), hideBtn: $("hideBtn"), finishBtn: $("finishBtn"),
+    finishNote: $("finishNote"), doneBanner: $("doneBanner"), copyWrap: $("copyWrap"),
+    copyText: $("copyText"), copyBtn: $("copyBtn"), log: $("log"), emptyLog: $("emptyLog"), slip: $("slip")
+  };
+
+  // state: { current: {genre, minutes, rolledAt, endAt|null, pausedLeft|null, finished:false}, history: [], hideClock:false }
+  let state = { current: null, history: [], hideClock: false };
+  try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s && typeof s === "object") state = Object.assign(state, s); } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+
+  const pick = (arr) => {
+    const u = new Uint32Array(1);
+    (window.crypto || {}).getRandomValues ? crypto.getRandomValues(u) : (u[0] = Math.floor(Math.random() * 4294967296));
+    return arr[u[0] % arr.length];
+  };
+  const fmt = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); const m = Math.floor(s / 60); return String(m).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
+  const dateStr = (t) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  let audioCtx = null;
+  function beep() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.35, 0.7].forEach((d) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = "sine"; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, audioCtx.currentTime + d);
+        g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + d + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + d + 0.28);
+        o.connect(g).connect(audioCtx.destination); o.start(audioCtx.currentTime + d); o.stop(audioCtx.currentTime + d + 0.3);
+      });
+    } catch (e) {}
+  }
+  let wake = null;
+  async function wakeOn() { try { wake = await navigator.wakeLock.request("screen"); } catch (e) { wake = null; } }
+  function wakeOff() { try { wake && wake.release(); } catch (e) {} wake = null; }
+
+  function renderLog() {
+    els.log.innerHTML = "";
+    const items = state.history.slice().reverse();
+    els.emptyLog.hidden = items.length > 0;
+    items.forEach((h, i) => {
+      const li = document.createElement("li");
+      const n = document.createElement("span"); n.className = "n"; n.textContent = "#" + String(state.history.length - i).padStart(3, "0");
+      const g = document.createElement("span"); g.textContent = h.genre + " · " + h.minutes + " min";
+      const t = document.createElement("span"); t.className = "t"; t.textContent = dateStr(h.rolledAt);
+      li.append(n, g, t); els.log.appendChild(li);
+    });
+  }
+
+  function leftMs() {
+    const c = state.current; if (!c) return 0;
+    if (c.endAt) return c.endAt - Date.now();
+    if (c.pausedLeft != null) return c.pausedLeft;
+    return c.minutes * 60000;
+  }
+
+  let ticker = null, alarmed = false;
+  function tick() {
+    const c = state.current; if (!c) return;
+    const left = leftMs(), total = c.minutes * 60000;
+    els.bar.style.width = Math.min(100, (1 - left / total) * 100) + "%";
+    if (state.hideClock && c.endAt && left > 0) { els.clock.textContent = "Writing…"; els.clock.classList.add("hidden-time"); }
+    else { els.clock.textContent = fmt(left); els.clock.classList.remove("hidden-time"); }
+    if (c.endAt && left <= 0) {
+      c.endAt = null; c.pausedLeft = 0; c.timeUp = true; save();
+      if (!alarmed) { alarmed = true; beep(); els.slip.classList.remove("alarm"); void els.slip.offsetWidth; els.slip.classList.add("alarm"); }
+      wakeOff(); render();
+    }
+  }
+
+  function render() {
+    const c = state.current;
+    els.hideBtn.textContent = state.hideClock ? "Show clock" : "Hide clock";
+    if (!c) {
+      els.genre.textContent = "—"; els.time.textContent = "—";
+      els.reelGenre.classList.remove("locked"); els.reelTime.classList.remove("locked");
+      els.rollArea.hidden = false; els.timerArea.hidden = true; els.copyWrap.hidden = true;
+      clearInterval(ticker); ticker = null; renderLog(); return;
+    }
+    els.genre.textContent = c.genre; els.time.textContent = c.minutes + " min";
+    els.reelGenre.classList.add("locked"); els.reelTime.classList.add("locked");
+    els.rollArea.hidden = true; els.timerArea.hidden = false; els.copyWrap.hidden = false;
+    els.copyText.textContent = "Prompt: | Genre: " + c.genre + " | Time: " + c.minutes + " min";
+    const running = !!c.endAt;
+    els.doneBanner.hidden = !c.timeUp;
+    els.startBtn.hidden = !!c.timeUp;
+    els.startBtn.textContent = running ? "Pause" : (c.pausedLeft != null ? "Resume" : "Start timer");
+    els.finishBtn.textContent = c.timeUp ? "Log it and finish" : "Finish session";
+    tick();
+    if (running && !ticker) ticker = setInterval(tick, 250);
+    if (!running && ticker) { clearInterval(ticker); ticker = null; }
+    renderLog();
+  }
+
+  els.rollBtn.addEventListener("click", () => {
+    if (state.current) return;
+    els.rollBtn.disabled = true;
+    const genre = pick(GENRES), minutes = pick(TIMES);
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const finish = () => {
+      state.current = { genre, minutes, rolledAt: Date.now(), endAt: null, pausedLeft: null, timeUp: false };
+      els.reelGenre.classList.remove("spinning"); els.reelTime.classList.remove("spinning");
+      els.rollBtn.disabled = false; save(); render();
+    };
+    if (reduce) return finish();
+    els.reelGenre.classList.add("spinning"); els.reelTime.classList.add("spinning");
+    let i = 0; const steps = 16;
+    const spin = setInterval(() => {
+      els.genre.textContent = GENRES[i % GENRES.length];
+      if (i < steps - 5) els.time.textContent = TIMES[i % TIMES.length] + " min"; else els.reelTime.classList.remove("spinning"), els.time.textContent = minutes + " min";
+      if (++i >= steps) { clearInterval(spin); finish(); }
+    }, 70);
+  });
+
+  els.startBtn.addEventListener("click", () => {
+    const c = state.current; if (!c || c.timeUp) return;
+    // unlock audio on first user gesture
+    try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume && audioCtx.resume(); } catch (e) {}
+    if (c.endAt) { c.pausedLeft = c.endAt - Date.now(); c.endAt = null; wakeOff(); }
+    else { c.endAt = Date.now() + (c.pausedLeft != null ? c.pausedLeft : c.minutes * 60000); c.pausedLeft = null; alarmed = false; wakeOn(); }
+    save(); render();
+  });
+
+  els.hideBtn.addEventListener("click", () => { state.hideClock = !state.hideClock; save(); render(); });
+
+  let confirmFinish = false, confirmTimer = null;
+  els.finishBtn.addEventListener("click", () => {
+    const c = state.current; if (!c) return;
+    if (!c.timeUp && !confirmFinish) {
+      confirmFinish = true; els.finishNote.hidden = false; els.finishBtn.textContent = "Yes, finish now";
+      clearTimeout(confirmTimer); confirmTimer = setTimeout(() => { confirmFinish = false; els.finishNote.hidden = true; render(); }, 5000);
+      return;
+    }
+    confirmFinish = false; els.finishNote.hidden = true; clearTimeout(confirmTimer);
+    state.history.push({ genre: c.genre, minutes: c.minutes, rolledAt: c.rolledAt });
+    state.current = null; wakeOff(); els.slip.classList.remove("alarm"); save(); render();
+  });
+
+  els.copyBtn.addEventListener("click", () => {
+    const text = els.copyText.textContent;
+    const done = () => { els.copyBtn.textContent = "Copied"; setTimeout(() => (els.copyBtn.textContent = "Copy"), 1500); };
+    const fallback = () => { const r = document.createRange(); r.selectNodeContents(els.copyText); const s = getSelection(); s.removeAllRanges(); s.addRange(r); els.copyBtn.textContent = "Selected"; setTimeout(() => (els.copyBtn.textContent = "Copy"), 1500); };
+    try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+  });
+
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && state.current && state.current.endAt) { wakeOn(); tick(); } });
+  render();
+})();
+</script>
+</body>
+</html>
