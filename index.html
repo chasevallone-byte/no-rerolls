@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: one narrow column — a "roll slip" with two reels, then the timer, then the log. Single dark look matching chase is no fun. */
+/* Layout: one narrow column — a "roll slip" with two reels, then the timer (think phase, then write phase), then the log. Single dark look matching chase is no fun. */
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 body { margin: 0; }
@@ -19,6 +19,7 @@ body { margin: 0; }
   --muted: #8a93ab;
   --accent: #ff6719;
   --accent-ink: #1a0a02;
+  --think: #7cc4ff;
   --good: #4fd18b;
   --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -56,15 +57,23 @@ button:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px; }
 .ghost { background: transparent; color: var(--fg); border-color: var(--line); }
 .ghost:hover { border-color: var(--muted); }
 button:disabled { opacity: .45; cursor: not-allowed; }
-.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; width: 100%; }
 .row button { flex: 1 1 140px; }
 .note { font-family: var(--mono); font-size: 12px; color: var(--muted); margin: 0; }
 
 .timer { display: flex; flex-direction: column; align-items: center; gap: 14px; padding-block: 8px; }
+.phase { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; padding: 5px 12px; border-radius: 99px; border: 1px solid currentColor; }
+.phase.think { color: var(--think); }
+.phase.write { color: var(--accent); }
+.phase.done { color: var(--good); }
+.steps { display: flex; gap: 8px; align-items: center; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.steps b { font-weight: 600; }
+.steps .on { color: var(--fg); }
 .clock { font-family: var(--mono); font-weight: 600; font-size: clamp(56px, 18vw, 84px); font-variant-numeric: tabular-nums; letter-spacing: -.03em; line-height: 1; }
 .clock.hidden-time { color: var(--muted); font-size: clamp(28px, 8vw, 36px); letter-spacing: .02em; }
 .bar { width: 100%; height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s linear; }
+.bar.think i { background: var(--think); }
 .done-banner { text-align: center; font-size: 22px; font-weight: 800; color: var(--good); margin: 0; }
 
 .copyline { display: flex; gap: 8px; align-items: center; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 8px 8px 12px; }
@@ -79,8 +88,10 @@ h2 { font-size: 13px; font-family: var(--mono); font-weight: 600; letter-spacing
 .empty { color: var(--muted); font-size: 14px; margin: 0; }
 
 @keyframes flash { 0%,100% { background: var(--panel); } 50% { background: #3a1606; } }
+@keyframes flashThink { 0%,100% { background: var(--panel); } 50% { background: #0c2a44; } }
 .slip.alarm { animation: flash 1s ease-in-out 3; }
-@media (prefers-reduced-motion: reduce) { .slip.alarm { animation: none; } .bar i { transition: none; } }
+.slip.alarm-think { animation: flashThink 1s ease-in-out 2; }
+@media (prefers-reduced-motion: reduce) { .slip.alarm, .slip.alarm-think { animation: none; } .bar i { transition: none; } }
 </style>
 </head>
 <body>
@@ -88,7 +99,7 @@ h2 { font-size: 13px; font-family: var(--mono); font-weight: 600; letter-spacing
   <header>
     <div class="eyebrow">chase is no fun · writing session</div>
     <h1>No <span>Rerolls.</span></h1>
-    <p class="rule">Open the book to any prompt, roll once, write until the timer ends. Whatever comes up, you write.</p>
+    <p class="rule">Open the book to any prompt and roll once. Take five minutes to find your idea, then write until the timer ends. Whatever comes up, you write.</p>
   </header>
 
   <section class="slip" id="slip" aria-live="polite">
@@ -110,14 +121,19 @@ h2 { font-size: 13px; font-family: var(--mono); font-weight: 600; letter-spacing
     </div>
 
     <div id="timerArea" class="timer" hidden>
-      <div class="clock" id="clock">00:00</div>
-      <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+      <div class="steps" aria-hidden="true"><b id="stepThink">1 · Think 5 min</b><span>→</span><b id="stepWrite">2 · Write</b></div>
+      <div class="phase think" id="phase">Think</div>
+      <div class="clock" id="clock">05:00</div>
+      <div class="bar think" id="barWrap" aria-hidden="true"><i id="bar"></i></div>
       <p class="done-banner" id="doneBanner" hidden>Time's up. Pens down.</p>
-      <div class="row" style="width:100%">
-        <button class="primary" id="startBtn" type="button">Start timer</button>
+      <div class="row">
+        <button class="primary" id="startBtn" type="button">Start thinking time</button>
         <button class="ghost" id="hideBtn" type="button">Hide clock</button>
       </div>
-      <div class="row" style="width:100%">
+      <div class="row">
+        <button class="ghost" id="skipBtn" type="button">Got my idea, start writing</button>
+      </div>
+      <div class="row">
         <button class="ghost" id="finishBtn" type="button">Finish session</button>
       </div>
       <p class="note" id="finishNote" hidden>Finishing early still counts. Tap again to confirm.</p>
@@ -140,20 +156,23 @@ h2 { font-size: 13px; font-family: var(--mono); font-weight: 600; letter-spacing
 (function () {
   const GENRES = ["Sci-fi", "Horror", "Comedy", "Memoir", "Noir/crime", "Fantasy", "Superhero", "Thriller/mystery"];
   const TIMES = [15, 30, 45, 60];
+  const THINK_MIN = 5;
   const KEY = "noRerolls.v1";
 
   const $ = (id) => document.getElementById(id);
   const els = {
     genre: $("genre"), time: $("time"), reelGenre: $("reelGenre"), reelTime: $("reelTime"),
     rollArea: $("rollArea"), rollBtn: $("rollBtn"), timerArea: $("timerArea"), clock: $("clock"),
-    bar: $("bar"), startBtn: $("startBtn"), hideBtn: $("hideBtn"), finishBtn: $("finishBtn"),
+    bar: $("bar"), barWrap: $("barWrap"), phase: $("phase"), stepThink: $("stepThink"), stepWrite: $("stepWrite"),
+    startBtn: $("startBtn"), hideBtn: $("hideBtn"), skipBtn: $("skipBtn"), finishBtn: $("finishBtn"),
     finishNote: $("finishNote"), doneBanner: $("doneBanner"), copyWrap: $("copyWrap"),
     copyText: $("copyText"), copyBtn: $("copyBtn"), log: $("log"), emptyLog: $("emptyLog"), slip: $("slip")
   };
 
-  // state: { current: {genre, minutes, rolledAt, endAt|null, pausedLeft|null, finished:false}, history: [], hideClock:false }
+  // current: { genre, minutes, rolledAt, phase: "think"|"write", endAt|null, pausedLeft|null, timeUp }
   let state = { current: null, history: [], hideClock: false };
   try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s && typeof s === "object") state = Object.assign(state, s); } catch (e) {}
+  if (state.current && !state.current.phase) state.current.phase = "write"; // sessions saved before the think phase existed
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
 
   const pick = (arr) => {
@@ -163,21 +182,24 @@ h2 { font-size: 13px; font-family: var(--mono); font-weight: 600; letter-spacing
   };
   const fmt = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); const m = Math.floor(s / 60); return String(m).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
   const dateStr = (t) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const phaseMin = (c) => (c.phase === "think" ? THINK_MIN : c.minutes);
 
   let audioCtx = null;
-  function beep() {
+  function chime(count, freq) {
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      [0, 0.35, 0.7].forEach((d) => {
+      for (let k = 0; k < count; k++) {
+        const d = k * 0.35;
         const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-        o.type = "sine"; o.frequency.value = 880;
+        o.type = "sine"; o.frequency.value = freq;
         g.gain.setValueAtTime(0.0001, audioCtx.currentTime + d);
         g.gain.exponentialRampToValueAtTime(0.25, audioCtx.currentTime + d + 0.02);
         g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + d + 0.28);
         o.connect(g).connect(audioCtx.destination); o.start(audioCtx.currentTime + d); o.stop(audioCtx.currentTime + d + 0.3);
-      });
+      }
     } catch (e) {}
   }
+  function flash(cls) { els.slip.classList.remove("alarm", "alarm-think"); void els.slip.offsetWidth; els.slip.classList.add(cls); }
   let wake = null;
   async function wakeOn() { try { wake = await navigator.wakeLock.request("screen"); } catch (e) { wake = null; } }
   function wakeOff() { try { wake && wake.release(); } catch (e) {} wake = null; }
@@ -199,20 +221,34 @@ h2 { font-size: 13px; font-family: var(--mono); font-weight: 600; letter-spacing
     const c = state.current; if (!c) return 0;
     if (c.endAt) return c.endAt - Date.now();
     if (c.pausedLeft != null) return c.pausedLeft;
-    return c.minutes * 60000;
+    return phaseMin(c) * 60000;
   }
 
-  let ticker = null, alarmed = false;
+  function startWriting() {
+    const c = state.current;
+    c.phase = "write"; c.pausedLeft = null; c.endAt = Date.now() + c.minutes * 60000;
+    wakeOn();
+  }
+
+  let ticker = null;
   function tick() {
     const c = state.current; if (!c) return;
-    const left = leftMs(), total = c.minutes * 60000;
-    els.bar.style.width = Math.min(100, (1 - left / total) * 100) + "%";
-    if (state.hideClock && c.endAt && left > 0) { els.clock.textContent = "Writing…"; els.clock.classList.add("hidden-time"); }
-    else { els.clock.textContent = fmt(left); els.clock.classList.remove("hidden-time"); }
+    const left = leftMs(), total = phaseMin(c) * 60000;
+    els.bar.style.width = Math.min(100, Math.max(0, (1 - left / total) * 100)) + "%";
+    if (state.hideClock && c.endAt && left > 0) {
+      els.clock.textContent = c.phase === "think" ? "Thinking…" : "Writing…";
+      els.clock.classList.add("hidden-time");
+    } else { els.clock.textContent = fmt(left); els.clock.classList.remove("hidden-time"); }
     if (c.endAt && left <= 0) {
-      c.endAt = null; c.pausedLeft = 0; c.timeUp = true; save();
-      if (!alarmed) { alarmed = true; beep(); els.slip.classList.remove("alarm"); void els.slip.offsetWidth; els.slip.classList.add("alarm"); }
-      wakeOff(); render();
+      if (c.phase === "think") {
+        // thinking time is over: chime and roll straight into the writing timer
+        chime(2, 660); flash("alarm-think");
+        startWriting(); save(); render();
+      } else {
+        c.endAt = null; c.pausedLeft = 0; c.timeUp = true; save();
+        chime(3, 880); flash("alarm");
+        wakeOff(); render();
+      }
     }
   }
 
@@ -229,10 +265,20 @@ h2 { font-size: 13px; font-family: var(--mono); font-weight: 600; letter-spacing
     els.reelGenre.classList.add("locked"); els.reelTime.classList.add("locked");
     els.rollArea.hidden = true; els.timerArea.hidden = false; els.copyWrap.hidden = false;
     els.copyText.textContent = "Prompt: | Genre: " + c.genre + " | Time: " + c.minutes + " min";
+
+    const thinking = c.phase === "think";
     const running = !!c.endAt;
+    els.phase.className = "phase " + (c.timeUp ? "done" : thinking ? "think" : "write");
+    els.phase.textContent = c.timeUp ? "Done" : thinking ? "Think · find your idea" : "Write · " + c.minutes + " min";
+    els.barWrap.className = "bar" + (thinking ? " think" : "");
+    els.stepThink.className = thinking && !c.timeUp ? "on" : "";
+    els.stepWrite.className = !thinking && !c.timeUp ? "on" : "";
+    els.stepWrite.textContent = "2 · Write " + c.minutes + " min";
+
     els.doneBanner.hidden = !c.timeUp;
     els.startBtn.hidden = !!c.timeUp;
-    els.startBtn.textContent = running ? "Pause" : (c.pausedLeft != null ? "Resume" : "Start timer");
+    els.startBtn.textContent = running ? "Pause" : c.pausedLeft != null ? "Resume" : thinking ? "Start thinking time" : "Start writing";
+    els.skipBtn.hidden = !thinking || !!c.timeUp;
     els.finishBtn.textContent = c.timeUp ? "Log it and finish" : "Finish session";
     tick();
     if (running && !ticker) ticker = setInterval(tick, 250);
@@ -240,13 +286,15 @@ h2 { font-size: 13px; font-family: var(--mono); font-weight: 600; letter-spacing
     renderLog();
   }
 
+  function unlockAudio() { try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume && audioCtx.resume(); } catch (e) {} }
+
   els.rollBtn.addEventListener("click", () => {
     if (state.current) return;
     els.rollBtn.disabled = true;
     const genre = pick(GENRES), minutes = pick(TIMES);
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const finish = () => {
-      state.current = { genre, minutes, rolledAt: Date.now(), endAt: null, pausedLeft: null, timeUp: false };
+      state.current = { genre, minutes, rolledAt: Date.now(), phase: "think", endAt: null, pausedLeft: null, timeUp: false };
       els.reelGenre.classList.remove("spinning"); els.reelTime.classList.remove("spinning");
       els.rollBtn.disabled = false; save(); render();
     };
@@ -255,18 +303,23 @@ h2 { font-size: 13px; font-family: var(--mono); font-weight: 600; letter-spacing
     let i = 0; const steps = 16;
     const spin = setInterval(() => {
       els.genre.textContent = GENRES[i % GENRES.length];
-      if (i < steps - 5) els.time.textContent = TIMES[i % TIMES.length] + " min"; else els.reelTime.classList.remove("spinning"), els.time.textContent = minutes + " min";
+      if (i < steps - 5) els.time.textContent = TIMES[i % TIMES.length] + " min";
+      else { els.reelTime.classList.remove("spinning"); els.time.textContent = minutes + " min"; }
       if (++i >= steps) { clearInterval(spin); finish(); }
     }, 70);
   });
 
   els.startBtn.addEventListener("click", () => {
     const c = state.current; if (!c || c.timeUp) return;
-    // unlock audio on first user gesture
-    try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume && audioCtx.resume(); } catch (e) {}
+    unlockAudio();
     if (c.endAt) { c.pausedLeft = c.endAt - Date.now(); c.endAt = null; wakeOff(); }
-    else { c.endAt = Date.now() + (c.pausedLeft != null ? c.pausedLeft : c.minutes * 60000); c.pausedLeft = null; alarmed = false; wakeOn(); }
+    else { c.endAt = Date.now() + (c.pausedLeft != null ? c.pausedLeft : phaseMin(c) * 60000); c.pausedLeft = null; wakeOn(); }
     save(); render();
+  });
+
+  els.skipBtn.addEventListener("click", () => {
+    const c = state.current; if (!c || c.phase !== "think") return;
+    unlockAudio(); startWriting(); save(); render();
   });
 
   els.hideBtn.addEventListener("click", () => { state.hideClock = !state.hideClock; save(); render(); });
@@ -281,7 +334,7 @@ h2 { font-size: 13px; font-family: var(--mono); font-weight: 600; letter-spacing
     }
     confirmFinish = false; els.finishNote.hidden = true; clearTimeout(confirmTimer);
     state.history.push({ genre: c.genre, minutes: c.minutes, rolledAt: c.rolledAt });
-    state.current = null; wakeOff(); els.slip.classList.remove("alarm"); save(); render();
+    state.current = null; wakeOff(); els.slip.classList.remove("alarm", "alarm-think"); save(); render();
   });
 
   els.copyBtn.addEventListener("click", () => {
